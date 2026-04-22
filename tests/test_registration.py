@@ -49,7 +49,6 @@ def user_existing(app):
                                                       
 
 def test_register_get_shows_form(client):
-    from flask import url_for
 
     resp = client.get("/auth/register", follow_redirects=False)
     assert resp.status_code == 302

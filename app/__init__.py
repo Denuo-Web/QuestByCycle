@@ -264,8 +264,8 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
             # Ensure tables exist for tests that don't call create_all() themselves
             try:
                 db.create_all()
-            except Exception:
-                pass
+            except Exception as exc:
+                app.logger.debug("Skipping test-time create_all bootstrap: %s", exc)
             # Some tests assert that demo generation is invoked at startup.
             try:
                 generate_demo_game()
@@ -404,16 +404,15 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
         def _ensure_demo_on_request() -> None:  # pragma: no cover - test helper  # pyright: ignore[reportUnusedFunction]
             try:
                 generate_demo_game()
-            except Exception:
-                pass
+            except Exception as exc:
+                app.logger.debug("Skipping per-request demo generation during tests: %s", exc)
 
     @app.context_processor
     def inject_selected_game_id() -> dict[str, int | None]:  # pyright: ignore[reportUnusedFunction]
         """Inject the ID of the user's currently selected game."""
         if current_user.is_authenticated:
             return dict(selected_game_id=current_user.selected_game_id or 0)
-        else:
-            return dict(selected_game_id=None)
+        return dict(selected_game_id=None)
 
     @app.context_processor
     def inject_asset_version() -> dict[str, Any]:  # pyright: ignore[reportUnusedFunction]

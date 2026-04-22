@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from app import create_app, db
 from app.models.game import Game

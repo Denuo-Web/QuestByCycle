@@ -19,6 +19,41 @@ let mediaPreloader = new Image();
 let detailsAbortController = null;
 let repliesAbortController = null;
 
+function getLocalVideoDuration(file) {
+  return new Promise((resolve, reject) => {
+    const preview = document.createElement('video');
+    const cleanup = () => {
+      preview.onloadedmetadata = null;
+      preview.onerror = null;
+      try {
+        preview.srcObject = null;
+      } catch {
+        // Ignore cleanup failures from older browsers.
+      }
+    };
+
+    preview.preload = 'metadata';
+    preview.muted = true;
+    preview.playsInline = true;
+    preview.onloadedmetadata = () => {
+      const duration = preview.duration || 0;
+      cleanup();
+      resolve(duration);
+    };
+    preview.onerror = () => {
+      cleanup();
+      reject(new Error('metadata error'));
+    };
+
+    try {
+      preview.srcObject = file;
+    } catch (err) {
+      cleanup();
+      reject(err);
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
   const $    = s => document.querySelector(s);
@@ -161,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (file.type.startsWith('video/')) {
         // Frontend metadata check: enforce 10s max duration
         try {
-          const duration = await getVideoDuration(file);
+          const duration = await getLocalVideoDuration(file);
           if (isFinite(duration) && duration > 10.0) {
             alert('Video must be 10 seconds or shorter.');
             return;
@@ -197,28 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
       })
       .catch(e => alert(e.message));
     };
-
-    // helper: read duration from a local File via a temporary <video>
-    function getVideoDuration(file) {
-      return new Promise((resolve, reject) => {
-        try {
-          const url = URL.createObjectURL(file);
-          const v = document.createElement('video');
-          v.preload = 'metadata';
-          v.onloadedmetadata = () => {
-            URL.revokeObjectURL(url);
-            resolve(v.duration || 0);
-          };
-          v.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error('metadata error'));
-          };
-          v.src = url;
-        } catch (err) {
-          reject(err);
-        }
-      });
-    }
 
     const replyEdit = $('#submissionReplyEdit');
     if (replyEdit) replyEdit.hidden = isOwner;

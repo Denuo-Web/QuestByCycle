@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, TEXT
 
 from app.utils.file_uploads import delete_media_file
 from app.constants import UTC
-from . import db, user_badges, user_games, followers
+from . import db, user_badges, followers
 
 
 class UserQuest(db.Model):
@@ -160,12 +160,11 @@ class User(UserMixin, db.Model):
 
     def generate_verification_token(self, expiration=320000):
         """Generate a JWT token for email verification."""
-        token = jwt.encode(
+        return jwt.encode(
             {'verify_email': self.id, 'exp': time() + expiration},
             current_app.config['SECRET_KEY'],
             algorithm='HS256'
         )
-        return token
 
     def ensure_c2s_token(self) -> str:
         """Ensure the user has a bearer token for C2S auth and return it.
@@ -195,12 +194,11 @@ class User(UserMixin, db.Model):
 
     def generate_reset_token(self, expiration=320000):
         """Generate a JWT token for password reset."""
-        token = jwt.encode(
+        return jwt.encode(
             {'reset_password': self.id, 'exp': time() + expiration},
             current_app.config['SECRET_KEY'],
             algorithm='HS256'
         )
-        return token
 
     @staticmethod
     def verify_reset_token(token):
@@ -284,8 +282,7 @@ class User(UserMixin, db.Model):
         for message in self.shoutboard_messages:
             db.session.delete(message)
         # Remove notifications for this user (explicit cleanup for SQLite/test envs)
-        from .user import Notification as _Notification  # local import to avoid hints cycle
-        _Notification.query.filter_by(user_id=self.id).delete(synchronize_session=False)
+        Notification.query.filter_by(user_id=self.id).delete(synchronize_session=False)
         # Remove ActivityPub activities stored for this user (outbox)
         for ap_activity in self.activitypub_activities:
             db.session.delete(ap_activity)
@@ -307,7 +304,7 @@ class User(UserMixin, db.Model):
     def get_score_for_game(self, game_id):
         """Retrieve the user's total score for a specific game."""
         from .quest import Quest
-        total_score = (
+        return (
             db.session.query(db.func.sum(UserQuest.points_awarded))
             .join(Quest, UserQuest.quest_id == Quest.id)
             .filter(
@@ -316,7 +313,6 @@ class User(UserMixin, db.Model):
             )
             .scalar() or 0
         )
-        return total_score
 
     def is_admin_for_game(self, game_id):
         """Return ``True`` if the user can administer the given game.
@@ -338,7 +334,6 @@ class User(UserMixin, db.Model):
 
     @property
     def unread_notifications_count(self):
-        from .notification import Notification
         return Notification.query.filter_by(
             user_id=self.id,
             is_read=False

@@ -26,6 +26,41 @@ const PLACEHOLDER_IMAGE = document
   .querySelector('meta[name="placeholder-image"]')
   .getAttribute('content');
 
+function getLocalVideoDuration(file) {
+  return new Promise((resolve, reject) => {
+    const preview = document.createElement('video');
+    const cleanup = () => {
+      preview.onloadedmetadata = null;
+      preview.onerror = null;
+      try {
+        preview.srcObject = null;
+      } catch {
+        // Ignore cleanup failures from older browsers.
+      }
+    };
+
+    preview.preload = 'metadata';
+    preview.muted = true;
+    preview.playsInline = true;
+    preview.onloadedmetadata = () => {
+      const duration = preview.duration || 0;
+      cleanup();
+      resolve(duration);
+    };
+    preview.onerror = () => {
+      cleanup();
+      reject(new Error('metadata error'));
+    };
+
+    try {
+      preview.srcObject = file;
+    } catch (err) {
+      cleanup();
+      reject(err);
+    }
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  OPEN QUEST DETAIL MODAL                                           */
 /* ------------------------------------------------------------------ */
@@ -516,7 +551,7 @@ async function submitQuestDetails(event, questId) {
     // Enforce 10s max duration for videos on the client side
     if (file && file.type.startsWith('video/')) {
       try {
-        const duration = await getVideoDuration(file);
+          const duration = await getLocalVideoDuration(file);
         if (isFinite(duration) && duration > 10.0) {
           alert('Video must be 10 seconds or shorter.');
           return;
@@ -548,7 +583,6 @@ async function submitQuestDetails(event, questId) {
     }
 
     if (!data.success) throw new Error(data.message);
-    if (!data.success) throw new Error(data.message);
 
     updateScoreboard(data.total_points);
     updateSocialLinks(data);
@@ -564,28 +598,6 @@ async function submitQuestDetails(event, questId) {
     if (submitBtn) submitBtn.disabled = false;
     hideLoadingModal();
   }
-}
-
-// helper: read duration from a local File via a temporary <video>
-function getVideoDuration(file) {
-  return new Promise((resolve, reject) => {
-    try {
-      const url = URL.createObjectURL(file);
-      const v = document.createElement('video');
-      v.preload = 'metadata';
-      v.onloadedmetadata = () => {
-        URL.revokeObjectURL(url);
-        resolve(v.duration || 0);
-      };
-      v.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('metadata error'));
-      };
-      v.src = url;
-    } catch (err) {
-      reject(err);
-    }
-  });
 }
 
 /**********************************************************************
@@ -717,7 +729,7 @@ function distributeImages(images) {
                 if (isLocal(rawFallback)) {
                     thumb.src = `/resize_image?path=${encodeURIComponent(localPath(rawFallback))}&width=${reqWidth}`;
                 } else {
-                    thumb.src = rawFallback;
+                    thumb.src = PLACEHOLDER_IMAGE;
                 }
             };
         }

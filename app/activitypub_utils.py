@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from email.utils import formatdate
 from functools import lru_cache
-from typing import Iterable, List, Optional, Set
+from typing import List, Optional, Set
 from urllib.parse import urlparse, urlunparse
 
 import requests
@@ -798,7 +798,7 @@ def get_activity(username, rest):
     for a in rec:
         if isinstance(a.json, dict) and a.json.get('id') == full_id:
             return jsonify(a.json), 200, {'Content-Type': 'application/activity+json'}
-    abort(404)
+    return abort(404)
 
 
 @ap_bp.route('/<username>/submissions/<int:sid>', methods=['GET'])
@@ -902,8 +902,12 @@ def deliver_activity(activity, sender):
         if hidden in deliver_payload:
             try:
                 del deliver_payload[hidden]
-            except Exception:
-                pass
+            except Exception as exc:
+                current_app.logger.debug(
+                    "Unable to remove hidden ActivityPub recipient field %s: %s",
+                    hidden,
+                    exc,
+                )
 
     for recipient in recipients:
         # Skip non-actor recipients like Public

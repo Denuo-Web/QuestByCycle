@@ -58,14 +58,13 @@ def login_as(client, user):
 
 
 def create_game(title, admin_id):
-    game = Game(
+    return Game(
         title=title,
         start_date=datetime.now(timezone.utc) - timedelta(days=1),
         end_date=datetime.now(timezone.utc) + timedelta(days=1),
         admin_id=admin_id,
         timezone="UTC",
     )
-    return game
 
 
 def test_import_quests_from_csv(client, admin_user, tmp_path):
@@ -97,4 +96,3 @@ def test_import_quests_from_csv(client, admin_user, tmp_path):
     assert len(quests) == 1
     assert quests[0].title == "Quest Title"
     assert quests[0].points == 10
-

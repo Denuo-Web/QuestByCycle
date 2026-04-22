@@ -12,8 +12,6 @@ from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from datetime import datetime
 from urllib.parse import urljoin, urlparse, urlencode, urlunparse
 from requests_oauthlib import OAuth2Session
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as google_requests
 from flask import (
     Blueprint,
     render_template,
@@ -49,7 +47,6 @@ from app.forms import (
     MastodonLoginForm,
     AcceptTermsForm,
 )
-from app.utils.email_utils import send_email
 from app import limiter
 from app.utils.rate_limit import email_or_ip
 from app.tasks import enqueue_email
@@ -1115,8 +1112,7 @@ def update_password():
             db.session.commit()
             flash('Your password has been updated.', 'success')
             return redirect(url_for('main.index'))
-        else:
-            flash('Current password is incorrect.', 'danger')
+        flash('Current password is incorrect.', 'danger')
     return render_template('update_password.html', form=form)
 
 

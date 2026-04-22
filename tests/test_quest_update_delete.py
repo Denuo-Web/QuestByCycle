@@ -45,14 +45,13 @@ def admin_user(app):
 
 
 def create_game(title, admin_id):
-    game = Game(
+    return Game(
         title=title,
         start_date=datetime.now(timezone.utc) - timedelta(days=1),
         end_date=datetime.now(timezone.utc) + timedelta(days=1),
         admin_id=admin_id,
         timezone="UTC",
     )
-    return game
 
 
 def setup_quest(admin_user):

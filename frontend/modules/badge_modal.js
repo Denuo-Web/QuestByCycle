@@ -1,7 +1,6 @@
 'use strict';
 import { openModal } from './modal_common.js';
 import logger from '../logger.js';
-import { getSafeMediaUrl } from '../utils.js';
 
 // Cache loaded badges within this module
 let allBadges = [];
@@ -9,6 +8,34 @@ const placeholderMeta = document.querySelector('meta[name="placeholder-image"]')
 const PLACEHOLDER_IMAGE = placeholderMeta
   ? placeholderMeta.getAttribute('content')
   : '';
+const CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
+
+function validateImageUrl(url) {
+  if (typeof url !== 'string') {
+    return PLACEHOLDER_IMAGE;
+  }
+
+  const value = url.trim();
+  if (!value || CONTROL_CHARS.test(value)) {
+    return PLACEHOLDER_IMAGE;
+  }
+
+  try {
+    const parsedUrl = new URL(value, window.location.origin);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return PLACEHOLDER_IMAGE;
+    }
+    if (parsedUrl.username || parsedUrl.password) {
+      return PLACEHOLDER_IMAGE;
+    }
+    if (parsedUrl.origin === window.location.origin) {
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+    }
+    return parsedUrl.href;
+  } catch {
+    return PLACEHOLDER_IMAGE;
+  }
+}
 
 /**
  * Fetch badges from the server. Updates the global cache and returns it.
@@ -100,7 +127,7 @@ function populateBadgeModal(badge, requiredCount, currentUserCompletions, taskLi
   }
 
   modalTitle.textContent = badge.name;
-  modalImage.src = getSafeMediaUrl(badge.image) || PLACEHOLDER_IMAGE;
+  modalImage.src = validateImageUrl(badge.image);
 
   modalText.textContent = '';
 

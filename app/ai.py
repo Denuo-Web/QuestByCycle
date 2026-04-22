@@ -32,6 +32,7 @@ def generate_quest():
     if quest_details:
         generated_quest_html = render_template('generated_quest.html', quest=quest_details, game_id=game_id)
         return jsonify({"generated_quest_html": generated_quest_html})
+    return jsonify({"error": error_message or "Unable to generate quest."}), 400
 
 
 @ai_bp.route('/create_quest', methods=['POST'])
@@ -107,6 +108,7 @@ def create_quest():
                 jsonify({"success": False, "message": "Failed to create quest"}),
                 500,
             )
+    return jsonify({"success": False, "errors": form.errors}), 400
 
 
 @ai_bp.route('/generate_badge_image', methods=['POST'])
@@ -192,14 +194,13 @@ def generate_quest_details(description):
 
             return quest_details, None
         
-        else:
-            return None, "Generated quest is not bicycle-related."
+        return None, "Generated quest is not bicycle-related."
 
     except Exception as e:
         return None, f"Failed to generate quest due to an error: {str(e)}"
 
 def generate_quest_prompt(description):
-    prompt = f"""
+    return f"""
     Here are examples of quests and their respective badges, the format needs to remain:
 
     Complete Quest:
@@ -275,7 +276,6 @@ def generate_quest_prompt(description):
 
     Quest:
     """
-    return prompt
 
 def parse_generated_text(response_text):
     try:

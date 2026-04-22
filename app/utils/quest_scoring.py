@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from flask import current_app, url_for
+from flask import url_for
 
-from ..models import db, Quest, Badge, Game, User, UserQuest, QuestSubmission, ShoutBoardMessage
+from ..models import db, Quest, Badge, User, UserQuest, QuestSubmission, ShoutBoardMessage
 from app.constants import UTC, FREQUENCY_DELTA
 
 MAX_POINTS_INT = 2 ** 63 - 1

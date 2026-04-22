@@ -1,7 +1,9 @@
 
 import logger from './logger.js';
 import { openModal } from './modules/modal_common.js';
-import { csrfFetchJson, getSafeSameOriginPath } from './utils.js';
+import { csrfFetchJson } from './utils.js';
+
+const CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
 
 function sendSkipWaiting(reg) {
   if (reg.waiting) {
@@ -10,12 +12,37 @@ function sendSkipWaiting(reg) {
 }
 
 function getSafeGameSelectionUrl(url) {
-  const safeUrl = getSafeSameOriginPath(url);
-  if (!safeUrl) {
+  if (typeof url !== 'string') {
+    return null;
+  }
+
+  const value = url.trim();
+  if (!value || CONTROL_CHARS.test(value)) {
     logger.error(`Invalid URL: ${url}`);
     return null;
   }
-  return safeUrl;
+
+  try {
+    const parsed = new URL(value, window.location.origin);
+    const refUrl = new URL(window.location.origin);
+    const refPort = refUrl.port || (refUrl.protocol === 'https:' ? '443' : '80');
+    const parsedPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return null;
+    }
+    if (parsed.username || parsed.password) {
+      return null;
+    }
+    if (parsed.hostname !== refUrl.hostname || parsedPort !== refPort) {
+      return null;
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    logger.error(`Invalid URL: ${url}`);
+    return null;
+  }
 }
 
 export function initLayout() {

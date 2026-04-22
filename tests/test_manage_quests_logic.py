@@ -59,14 +59,13 @@ def login_as(client, user):
 
 
 def create_game(title, admin_id):
-    game = Game(
+    return Game(
         title=title,
         start_date=datetime.now(timezone.utc) - timedelta(days=1),
         end_date=datetime.now(timezone.utc) + timedelta(days=1),
         admin_id=admin_id,
         timezone="UTC",
     )
-    return game
 
 
 def test_get_quests_per_game(client, admin_user):

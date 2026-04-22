@@ -97,8 +97,7 @@ def upload_media_to_twitter(
         if response.status_code == 200:
             media_id = response.json().get('media_id_string')
             return media_id, None
-        else:
-            return None, response.text
+        return None, response.text
 
 
 def post_to_twitter(
@@ -128,8 +127,7 @@ def post_to_twitter(
         tweet_id = response.json().get('data').get('id')
         twitter_url = f"https://twitter.com/{twitter_username}/status/{tweet_id}"
         return twitter_url, None
-    else:
-        return None, response.text
+    return None, response.text
 
 
 def get_facebook_page_access_token(user_access_token, page_id):
@@ -176,8 +174,7 @@ def post_to_facebook_with_image(page_id, message, media_object_id, access_token)
         post_id = response.json().get('id')
         fb_url = f"https://www.facebook.com/{post_id}"
         return fb_url, None
-    else:
-        return None, response.text
+    return None, response.text
 
 
 def get_instagram_permalink(media_id, access_token):
@@ -186,8 +183,7 @@ def get_instagram_permalink(media_id, access_token):
     permalink_data = permalink_response.json()
     if 'permalink' in permalink_data:
         return permalink_data['permalink'], None
-    else:
-        raise Exception("Permalink not available yet.")
+    raise Exception("Permalink not available yet.")
 
 
 def post_to_instagram(image_url, caption, user_id, access_token):

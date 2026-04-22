@@ -286,7 +286,7 @@ def get_quest_categories():
 @limiter.limit("10/minute", key_func=user_or_ip)
 @limiter.limit("50/minute")
 def upload_images():
-    game_id = get_int_param('game_id')
+    get_int_param('game_id')
 
     uploaded_files = request.files.getlist('file')
     images_folder = os.path.join(current_app.root_path, 'static', 'images', 'badge_images')
