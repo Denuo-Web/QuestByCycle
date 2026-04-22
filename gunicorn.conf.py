@@ -4,7 +4,7 @@ import os
 from importlib import import_module
 
 
-bind = f"0.0.0.0:{os.getenv('PORT', '5000')}"
+bind = os.getenv("GUNICORN_BIND", f"127.0.0.1:{os.getenv('PORT', '5000')}")
 workers = int(os.getenv("WEB_CONCURRENCY", "2"))
 threads = int(os.getenv("GUNICORN_THREADS", "4"))
 timeout = int(os.getenv("GUNICORN_TIMEOUT", "120"))
@@ -42,4 +42,3 @@ def on_exit(server):
 
         server.log.info("Shutting down scheduler")
         shutdown_scheduler(_scheduler_app, wait=False)
-
