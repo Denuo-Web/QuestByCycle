@@ -1,0 +1,4 @@
+name: QuestByCycle CodeQL Config
+
+paths-ignore:
+  - app/static/dist/**
