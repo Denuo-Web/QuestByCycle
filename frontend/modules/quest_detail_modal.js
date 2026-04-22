@@ -504,7 +504,7 @@ async function submitQuestDetails(event, questId) {
           alert('Video must be 10 seconds or shorter.');
           return;
         }
-      } catch (e) {
+      } catch {
         alert('Unable to read video metadata. Please try another file.');
         return;
       }

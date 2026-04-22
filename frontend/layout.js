@@ -13,7 +13,7 @@ function isSafeRelativeUrl(url) {
   try {
     const parsed = new URL(url, window.location.origin);
     return parsed.origin === window.location.origin && parsed.protocol !== 'javascript:';
-  } catch (err) {
+  } catch {
     logger.error(`Invalid URL: ${url}`);
     return false;
   }
@@ -28,7 +28,7 @@ export function initLayout() {
       window.location.reload();
     });
     const assetVersion =
-      document.querySelector("meta[name='asset-version']")?.content || "";
+      document.querySelector('meta[name="asset-version"]')?.content || '';
     navigator.serviceWorker
       .register(`/sw.js?v=${assetVersion}`)
       .then((registration) => {

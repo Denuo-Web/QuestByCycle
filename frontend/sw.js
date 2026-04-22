@@ -1,11 +1,11 @@
 // The version of the cache
-const VERSION = '1.2.1-65b6597'; // Update this version number when changes are made
+const VERSION = '1.2.1-57f6a0d'; // Update this version number when changes are made
 const CACHE_NAME = `questbycycle-${VERSION}`;
 
 // List of static resources to cache
 const APP_STATIC_RESOURCES = [
   // Offline fallback
-  "/offline.html",
+  '/offline.html',
 
   // CSS Files
   `/static/dist/style.css?v=${VERSION}`,
@@ -15,14 +15,14 @@ const APP_STATIC_RESOURCES = [
   `/static/dist/submitPhoto.js?v=${VERSION}`,
 
   // Icons
-  "/static/icons/icon_48x48.webp",
-  "/static/icons/icon_96x96.webp",
-  "/static/icons/icon_192x192.webp",
-  "/static/icons/icon_512x512.webp",
-  "/static/icons/apple-touch-icon-180x180.png",
+  '/static/icons/icon_48x48.webp',
+  '/static/icons/icon_96x96.webp',
+  '/static/icons/icon_192x192.webp',
+  '/static/icons/icon_512x512.webp',
+  '/static/icons/apple-touch-icon-180x180.png',
 
   // Images (Add specific files if needed)
-  "/static/images/welcomeQuestByCycle.webp",
+  '/static/images/welcomeQuestByCycle.webp',
 ];
 
 // -------------------- Background Sync Helpers --------------------
