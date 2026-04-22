@@ -605,20 +605,6 @@ files = [
 ]
 
 [[package]]
-name = "crawler-user-agents"
-version = "1.46.0"
-description = "Syntactic patterns of HTTP user-agents used by bots / robots / crawlers / scrapers / spiders."
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "crawler_user_agents-1.46.0-py3-none-any.whl", hash = "sha256:67e56276fcf2fda0d3426753eadb7582eb3dcc6acfc8cba36277e13bf7b9b350"},
-]
-
-[package.extras]
-dev = ["attrs (==23.2.0)", "iniconfig (==2.0.0)", "jsonschema (==4.22.0)", "jsonschema-specifications (==2023.12.1)", "packaging (==24.0)", "pluggy (==1.5.0)", "pytest (==8.2.0)", "referencing (==0.35.0)", "rpds-py (==0.25.0)"]
-
-[[package]]
 name = "croniter"
 version = "6.2.2"
 description = "croniter provides iteration for datetime object with cron like format"
@@ -798,19 +784,17 @@ dotenv = ["python-dotenv"]
 
 [[package]]
 name = "flask-humanify"
-version = "0.2.9"
+version = "0.2.3"
 description = "Protect against bots and DDoS attacks"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "flask_humanify-0.2.9-py3-none-any.whl", hash = "sha256:68a61f23c1624cd98868334e2b699f1787f13c55599a02fe144b68277f861a21"},
-    {file = "flask_humanify-0.2.9.tar.gz", hash = "sha256:1781c42f94e9b6b7a31072199f29631248931a7d12ba08cb58e7611f453df389"},
+    {file = "flask_humanify-0.2.3-py3-none-any.whl", hash = "sha256:a8f1c54d99c68f13a5470f92ee3df7a35c944dc396658e51efb08298fb471faa"},
+    {file = "flask_humanify-0.2.3.tar.gz", hash = "sha256:daaa50b131c9d7d27caa201a17962371534698f62b29c2dfc6a942525a22cea3"},
 ]
 
 [package.dependencies]
-audioop-lts = {version = ">=0.2.1", markers = "python_version >= \"3.13\""}
-crawler-user-agents = "*"
 cryptography = "*"
 Flask = "*"
 netaddr = "*"
@@ -3720,4 +3704,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "a8a36a29c88c56c17ac7c4ab3b40e196b02d45275fc58a58c13d5a31c90b4ad4"
+content-hash = "6d5492d06cccd0f668dd9fab8826d7e94cb1f83dbefd3d86e5e1b56f4fe733b5"

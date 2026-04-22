@@ -35,8 +35,9 @@ rq                   = "^2.8.0"
 psycopg2-binary = "^2.9.12"
 google-cloud-storage = "^3.10.1"
 google-api-python-client = "^2.194.0"
-flask-humanify = "^0.2.9"
+flask-humanify = "0.2.3"
 pydantic = "^2.13.3"
+audioop-lts = {version = "0.2.2", markers = "python_version >= \"3.13\""}
 
 [tool.poetry.scripts]
 rqworker = "rq_worker:main"
