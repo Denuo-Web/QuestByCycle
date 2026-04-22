@@ -138,6 +138,23 @@ def test_register_with_next_param(client):
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/dashboard")
 
+
+def test_register_with_same_origin_absolute_next(client):
+    data = {
+        "email": "safeabsolute@example.com",
+        "password": "safepwd",
+        "confirm_password": "safepwd",
+        "accept_license": "y",
+    }
+    resp = client.post(
+        "/auth/register",
+        data=data,
+        query_string={"next": "http://localhost:5000/dashboard?tab=summary"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/dashboard?tab=summary")
+
                                                                         
 
 def test_register_with_game_id(client):

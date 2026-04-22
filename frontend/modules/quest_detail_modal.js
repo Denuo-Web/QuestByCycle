@@ -1,7 +1,13 @@
 import { openModal } from './modal_common.js';
 import { showLoadingModal, hideLoadingModal } from './loading_modal.js';
 import { resetModalContent } from './modal_common.js';
-import { getCSRFToken, csrfFetchJson, fetchJson } from '../utils.js';
+import {
+  getCSRFToken,
+  csrfFetchJson,
+  fetchJson,
+  getSafeExternalUrl,
+  getSafeMediaUrl
+} from '../utils.js';
 import { showSubmissionDetail } from './submission_detail_modal.js';
 import logger from '../logger.js';
 
@@ -152,10 +158,14 @@ function populateQuestDetails(quest, userCompletionCount, canVerify, questId, ne
     elements['modalQuestPoints'].innerText = `${quest.points}`;
     elements['modalQuestCategory'].innerText = quest.category || 'No category set';
     
-    const completionText = quest.completion_limit > 1 ? `${quest.completion_limit} times` : `${quest.completion_limit} time`;
+    const completionText = quest.completion_limit > 1
+        ? `${quest.completion_limit} times`
+        : `${quest.completion_limit} time`;
     elements['modalQuestCompletionLimit'].innerText = `${completionText} ${quest.frequency}`;
 
-    const completionTextAward = quest.badge_awarded > 1 ? `${quest.badge_awarded} times` : `${quest.badge_awarded} time`;
+    const completionTextAward = quest.badge_awarded > 1
+        ? `${quest.badge_awarded} times`
+        : `${quest.badge_awarded} time`;
     if (quest.badge_awarded != null) {
         elements['modalQuestBadgeAwarded'].innerText = `After ${completionTextAward}`;
     } else {
@@ -179,11 +189,15 @@ function populateQuestDetails(quest, userCompletionCount, canVerify, questId, ne
             break;
     }
 
-    const badgeImagePath = quest.badge && quest.badge.image ? `/static/images/badge_images/${quest.badge.image}` : PLACEHOLDER_IMAGE;
+    const badgeImagePath = quest.badge && quest.badge.image
+        ? `/static/images/badge_images/${quest.badge.image}`
+        : PLACEHOLDER_IMAGE;
     elements['modalQuestBadgeImage'].setAttribute('data-src', badgeImagePath);
     elements['modalQuestBadgeImage'].src = PLACEHOLDER_IMAGE;
     elements['modalQuestBadgeImage'].classList.add('lazyload');
-    elements['modalQuestBadgeImage'].alt = quest.badge && quest.badge.name ? `Badge: ${quest.badge.name}` : 'Default Badge';
+    elements['modalQuestBadgeImage'].alt = quest.badge && quest.badge.name
+        ? `Badge: ${quest.badge.name}`
+        : 'Default Badge';
 
     if (quest.badge_option === 'none') {
         cards.badge.classList.add('hidden');
@@ -439,10 +453,13 @@ function setupSubmissionForm(questId) {
 
 function toggleLink(el, url) {
     if (!el) return;
-    if (url && url.trim()) {
-        el.href = url;
+    const safeUrl = getSafeExternalUrl(url);
+    if (safeUrl) {
+        el.href = safeUrl;
+        el.rel = 'noopener noreferrer';
         el.style.display = 'inline';
     } else {
+        el.removeAttribute('href');
         el.style.display = 'none';
     }
 }
@@ -519,8 +536,13 @@ async function submitQuestDetails(event, questId) {
     });
 
     if (status !== 200) {
-      if (status === 403 && data.message === 'This quest cannot be completed outside of the game dates') {
-        throw new Error('The game has ended and you can no longer submit quests. Join a new game in the game dropdown menu.');
+      if (
+        status === 403 &&
+        data.message === 'This quest cannot be completed outside of the game dates'
+      ) {
+        throw new Error(
+          'The game has ended and you can no longer submit quests. Join a new game in the game dropdown menu.'
+        );
       }
       throw new Error(data.message || `Server responded with status ${status}`);
     }
@@ -587,16 +609,18 @@ async function fetchQuestSubmissions(questId) {
       const profileLink    = document.getElementById('submitterProfileLink');
       const profileImg     = document.getElementById('submitterProfileImage');
       const profileCaption = document.getElementById('submitterProfileCaption');
+      const safeImageUrl = getSafeMediaUrl(s.image_url) || PLACEHOLDER_IMAGE;
+      const safeVideoUrl = getSafeMediaUrl(s.video_url);
 
-      if (s.video_url) {
+      if (safeVideoUrl) {
         imgEl.hidden = true;
         vidEl.hidden = false;
-        vidSrc.src   = s.video_url;
+        vidSrc.src   = safeVideoUrl;
         vidEl.load();
       } else {
         vidEl.hidden = true;
         imgEl.hidden = false;
-        imgEl.src    = s.image_url || PLACEHOLDER_IMAGE;
+        imgEl.src    = safeImageUrl;
       }
       commentEl.textContent = s.comment || 'No comment provided.';
 
@@ -605,7 +629,7 @@ async function fetchQuestSubmissions(questId) {
       } else if (profileLink) {
         profileLink.removeAttribute('href');
       }
-      profileImg.src     = s.user_profile_picture || PLACEHOLDER_IMAGE;
+      profileImg.src = getSafeMediaUrl(s.user_profile_picture) || PLACEHOLDER_IMAGE;
       profileCaption.textContent =
         s.user_display_name || s.user_username || `User ${s.user_id}`;
 
@@ -642,27 +666,6 @@ async function fetchQuestSubmissions(questId) {
   }
 }
 
-function isValidImageUrl(url) {
-    if (!url) {
-        logger.error(`Invalid URL detected: ${url}`);
-        return false;
-    }
-    try {
-        if (url.startsWith('/')) {
-            return true;
-        }
-        const parsedUrl = new URL(url);
-        if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-            const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-            return allowedExtensions.some(ext => parsedUrl.pathname.toLowerCase().endsWith(ext));
-        }
-    } catch {
-        logger.error(`Invalid URL detected: ${url}`);
-        return false;
-    }
-    return false;
-}
-
 function distributeImages(images) {
     const board = document.getElementById('submissionBoard');
     if (!board) {
@@ -674,7 +677,7 @@ function distributeImages(images) {
     const rawFallbackRaw =
         document.getElementById('questDetailModal')?.getAttribute('data-placeholder-url') ||
         PLACEHOLDER_IMAGE;
-    const rawFallback = isValidImageUrl(rawFallbackRaw) ? rawFallbackRaw : PLACEHOLDER_IMAGE;
+    const rawFallback = getSafeMediaUrl(rawFallbackRaw) || PLACEHOLDER_IMAGE;
 
     const isLocal   = url => url.startsWith('/static/');
     const localPath = url => url.replace(/^\/static\//, '');    // “images/foo.webp”
@@ -683,16 +686,17 @@ function distributeImages(images) {
 
     images.forEach(imgData => {
         let thumb;
-        if (imgData.video_url) {
+        const safeVideoUrl = getSafeMediaUrl(imgData.video_url);
+        if (safeVideoUrl) {
             thumb = document.createElement('video');
-            thumb.src = imgData.video_url;
+            thumb.src = safeVideoUrl;
             thumb.preload = 'metadata';
             thumb.muted = true;
             thumb.playsInline = true;
             thumb.style.objectFit = 'cover';
         } else {
             thumb = document.createElement('img');
-            const rawSrc = isValidImageUrl(imgData.url) ? imgData.url : rawFallback;
+            const rawSrc = getSafeMediaUrl(imgData.url) || rawFallback;
             const thumbSrc = isLocal(rawSrc)
                 ? `/resize_image?path=${encodeURIComponent(localPath(rawSrc))}&width=${reqWidth}`
                 : rawSrc;
@@ -706,14 +710,14 @@ function distributeImages(images) {
         thumb.style.height = 'auto';
         thumb.style.marginRight = '10px';
 
-        if (imgData.video_url) {
+        if (safeVideoUrl) {
             // no lazy load for videos
         } else {
             thumb.onerror = () => {
                 if (isLocal(rawFallback)) {
                     thumb.src = `/resize_image?path=${encodeURIComponent(localPath(rawFallback))}&width=${reqWidth}`;
                 } else {
-                    thumb.src = encodeURI(rawFallback);
+                    thumb.src = rawFallback;
                 }
             };
         }

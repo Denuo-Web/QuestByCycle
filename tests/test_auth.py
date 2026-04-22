@@ -99,6 +99,20 @@ def test_get_login_drops_unsafe_next(client):
     assert "next" not in params
 
 
+def test_get_login_normalizes_same_origin_absolute_next(client):
+    resp = client.get(
+        "/auth/login",
+        query_string={"next": "http://localhost:5000/profile?tab=activity"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    loc = resp.headers["Location"]
+    parsed = urlparse(loc)
+    params = parse_qs(parsed.query)
+
+    assert params["next"] == ["/profile?tab=activity"]
+
+
 
 @pytest.mark.parametrize("headers,status_code,error,show_forgot", [
     ({}, 302, None, None),                                  

@@ -10,7 +10,7 @@ import redis
 
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from datetime import datetime
-from urllib.parse import urlparse, urlencode
+from urllib.parse import urljoin, urlparse, urlencode, urlunparse
 from requests_oauthlib import OAuth2Session
 from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
@@ -37,7 +37,6 @@ from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash
 from app.constants import UTC
-from urllib.parse import urljoin
 from app.models import db
 from app.models.user import User
 from app.models.game import Game
@@ -90,7 +89,7 @@ def _send_verification_email(user):
     token = user.generate_verification_token()
     raw_gid = (request.values.get('game_id') or '').strip()
     raw_code = (request.values.get('custom_game_code') or '').strip()
-    raw_next = (request.values.get('next') or '').strip()
+    raw_next = _normalize_safe_redirect_target(request.values.get("next"))
 
     params = {'token': token}
 
@@ -103,7 +102,7 @@ def _send_verification_email(user):
         params['show_join_custom'] = 1
 
     if raw_next:
-        params['next'] = raw_next
+        params["next"] = raw_next
 
     verify_url = safe_url_for('auth.verify_email', _external=True, **params)
     html = render_template('verify_email.html', verify_url=verify_url)
@@ -163,6 +162,7 @@ def _finalize_registration(
     next_page: str | None,
 ):
     """Handle post-registration actions and redirect."""
+    safe_next = _normalize_safe_redirect_target(next_page)
 
     create_activitypub_actor(user)
     mail_server = current_app.config.get("MAIL_SERVER")
@@ -178,8 +178,8 @@ def _finalize_registration(
     if game_id:
         _join_game_if_provided(user, game_id)
 
-    if next_page and _is_safe_url(next_page):
-        return redirect(next_page)
+    if safe_next:
+        return redirect(safe_next)
 
     if quest_id:
         return redirect(
@@ -197,7 +197,7 @@ def _finalize_registration(
             "quest_id": quest_id,
             "_external": True,
         }
-        params.update(_next_params(next_page))
+        params.update(_next_params(safe_next))
         return redirect(safe_url_for("main.index", **params))
 
     return redirect(
@@ -635,22 +635,48 @@ def google_callback():
     return redirect(url_for("main.index"))
 
 
+def _normalize_safe_redirect_target(target: str | None) -> str | None:
+    """Return a sanitized same-origin redirect target or ``None``."""
+
+    if not target:
+        return None
+
+    candidate = target.strip()
+    if "\\" in candidate or not candidate or any(ord(ch) < 32 for ch in candidate):
+        return None
+
+    ref_url = urlparse(request.host_url)
+    try:
+        test_url = urlparse(urljoin(request.host_url, candidate))
+        ref_port = ref_url.port or (443 if ref_url.scheme == "https" else 80)
+        test_port = test_url.port or (443 if test_url.scheme == "https" else 80)
+    except ValueError:
+        return None
+
+    if test_url.scheme not in ("http", "https"):
+        return None
+    if test_url.username or test_url.password:
+        return None
+    if test_url.hostname != ref_url.hostname or test_port != ref_port:
+        return None
+
+    return urlunparse(
+        ("", "", test_url.path or "/", test_url.params, test_url.query, test_url.fragment)
+    )
+
+
 def _is_safe_url(target: str | None) -> bool:
     """Return True if the redirect target is local to our server."""
 
-    if not target:
-        return False
-    target = target.replace("\\", "")
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
-    return test_url.scheme in ("http", "https") and ref_url.netloc == test_url.netloc
+    return _normalize_safe_redirect_target(target) is not None
 
 
 def _next_params(next_page: str | None) -> dict[str, str]:
-    """Return a ``next`` parameter dict when the URL is safe."""
+    """Return a sanitized ``next`` parameter dict when the URL is safe."""
 
-    if next_page and _is_safe_url(next_page):
-        return {"next": next_page}
+    safe_next = _normalize_safe_redirect_target(next_page)
+    if safe_next:
+        return {"next": safe_next}
     return {}
 
 
@@ -668,11 +694,11 @@ def login():
     game_id    = request.values.get('game_id') or None
     quest_id   = request.values.get('quest_id') or None
     show_join  = request.values.get('show_join_custom')
-    next_page  = request.values.get('next')
+    next_page = _normalize_safe_redirect_target(request.values.get("next"))
 
                                            
     if current_user.is_authenticated:
-        if next_page and _is_safe_url(next_page):
+        if next_page:
             return redirect(next_page)
         return redirect(url_for('main.index', show_login=0))
 
@@ -768,7 +794,7 @@ def login():
         _join_game_if_provided(user)
 
                             
-    if next_page and _is_safe_url(next_page):
+    if next_page:
         if is_ajax:
             return jsonify({'success': True, 'redirect': next_page}), 200
         return redirect(next_page)
@@ -826,7 +852,9 @@ def register():
     game_id = (request.args.get('game_id') or request.form.get('game_id') or None)
     custom_game_code = request.args.get('custom_game_code') or request.form.get('custom_game_code')
     quest_id = (request.args.get('quest_id') or request.form.get('quest_id') or None)
-    next_page = request.args.get('next') or request.form.get('next')
+    next_page = _normalize_safe_redirect_target(
+        request.args.get("next") or request.form.get("next")
+    )
 
 
     pending = session.pop('pending_registration', None)
@@ -868,7 +896,11 @@ def register():
             pending.get('next_page'),
         )
 
-    if request.method == 'POST' and not current_app.config.get('TESTING') and not humanify_ext.has_valid_clearance_token:
+    if (
+        request.method == 'POST'
+        and not current_app.config.get('TESTING')
+        and not humanify_ext.has_valid_clearance_token
+    ):
         if form.validate_on_submit():
             email = sanitize_html(form.email.data or '').lower()
             if not User.query.filter_by(email=email).first():
@@ -877,13 +909,13 @@ def register():
                     'password_hash': generate_password_hash(form.password.data),
                     'game_id': game_id,
                     'quest_id': quest_id,
-                    'next_page': next_page if _is_safe_url(next_page) else None,
+                    'next_page': next_page,
                 }
         return humanify_ext.challenge()
 
     if request.method == 'GET':
 
-        if not game_id and next_page and _is_safe_url(next_page):
+        if not game_id and next_page:
             parsed = urlparse(next_page)
             if parsed.netloc in (urlparse(request.host_url).netloc, '') \
                and parsed.path.lstrip('/').isdigit():
@@ -977,7 +1009,7 @@ def register():
         _join_game_if_provided(user)
 
                                             
-    if next_page and _is_safe_url(next_page):
+    if next_page:
         return redirect(next_page)
 
     if quest_id:
@@ -1128,7 +1160,7 @@ def accept_terms():
     - POST: persist acceptance and redirect to index with show_join_custom=1.
     """
     form = AcceptTermsForm()
-    next_page = request.args.get('next')
+    next_page = _normalize_safe_redirect_target(request.args.get("next"))
 
     # If already accepted, head to index with the join modal (no auto-join)
     if current_user.license_agreed:

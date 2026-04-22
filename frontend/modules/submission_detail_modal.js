@@ -1,5 +1,10 @@
 import { openModal, closeModal, resetModalContent } from './modal_common.js';
-import { csrfFetchJson, fetchJson } from '../utils.js';
+import {
+  csrfFetchJson,
+  fetchJson,
+  getSafeExternalUrl,
+  getSafeMediaUrl
+} from '../utils.js';
 import { showUserProfileModal } from './user_profile_modal.js';
 import { refreshQuestDetailModal } from './quest_detail_modal.js';
 
@@ -58,8 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaPreloader.src = '';
     if (!Array.isArray(albumItems)) return;
     const next = albumItems[albumIndex + 1];
-    if (!next || next.video_url) return;
-    mediaPreloader.src = next.url;
+    if (!next) return;
+    if (getSafeMediaUrl(next.video_url)) return;
+    const nextUrl = getSafeMediaUrl(next.url);
+    if (nextUrl) {
+      mediaPreloader.src = nextUrl;
+    }
   };
 
   showSubmissionDetail = function(image) {
@@ -172,15 +181,17 @@ document.addEventListener('DOMContentLoaded', () => {
       })
       .then(({ json }) => {
         if (!json.success) throw new Error(json.message || 'Upload failed');
-        if (json.video_url) {
+        const safeVideoUrl = getSafeMediaUrl(json.video_url);
+        const safeImageUrl = getSafeMediaUrl(json.image_url) || PLACEHOLDER_IMAGE;
+        if (safeVideoUrl) {
           $('#submissionImage').hidden = true;
           $('#submissionVideo').hidden = false;
-          $('#submissionVideoSource').src = json.video_url;
+          $('#submissionVideoSource').src = safeVideoUrl;
           $('#submissionVideo').load();
         } else {
           $('#submissionVideo').hidden = true;
           $('#submissionImage').hidden = false;
-          $('#submissionImage').src = json.image_url;
+          $('#submissionImage').src = safeImageUrl;
         }
         cancelPhotoBtn.click();
       })
@@ -260,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // set picture & caption
-    el.profileImg.src        = image.user_profile_picture || PLACEHOLDER_IMAGE;
+    el.profileImg.src = getSafeMediaUrl(image.user_profile_picture) || PLACEHOLDER_IMAGE;
     el.profileImgOverlay.src = el.profileImg.src;
     el.profileCap.textContent = image.user_display_name || image.user_username || '—';
 
@@ -285,16 +296,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // submission image & comment
     const placeholder = PLACEHOLDER_IMAGE;
-    if (image.video_url) {
+    const safeVideoUrl = getSafeMediaUrl(image.video_url);
+    const safeImageUrl = getSafeMediaUrl(image.url) || placeholder;
+    if (safeVideoUrl) {
       el.img.hidden = true;
       el.video.hidden = false;
-      el.videoSource.src = image.video_url;
+      el.videoSource.src = safeVideoUrl;
       el.video.load();
       el.video.onloadeddata = () => setNavDisabled(false);
     } else {
       el.video.hidden = true;
       el.img.hidden   = false;
-      el.img.src = image.url || placeholder;
+      el.img.src = safeImageUrl;
       if (el.img.complete) {
         setNavDisabled(false);
       } else {
@@ -307,11 +320,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // social links
     ['tw','fb','ig'].forEach(k=>{
       const prop = k==='tw'?'twitter_url':k==='fb'?'fb_url':'instagram_url';
-      try {
-        new URL(image[prop]);
-        el.social[k].href = image[prop];
+      const safeUrl = getSafeExternalUrl(image[prop]);
+      if (safeUrl) {
+        el.social[k].href = safeUrl;
+        el.social[k].rel = 'noopener noreferrer';
         el.social[k].style.display = 'inline-block';
-      } catch {
+      } else {
+        el.social[k].removeAttribute('href');
         el.social[k].style.display = 'none';
       }
     });

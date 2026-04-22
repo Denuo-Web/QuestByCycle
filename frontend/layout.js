@@ -1,7 +1,7 @@
 
 import logger from './logger.js';
 import { openModal } from './modules/modal_common.js';
-import { csrfFetchJson } from './utils.js';
+import { csrfFetchJson, getSafeSameOriginPath } from './utils.js';
 
 function sendSkipWaiting(reg) {
   if (reg.waiting) {
@@ -9,14 +9,13 @@ function sendSkipWaiting(reg) {
   }
 }
 
-function isSafeRelativeUrl(url) {
-  try {
-    const parsed = new URL(url, window.location.origin);
-    return parsed.origin === window.location.origin && parsed.protocol !== 'javascript:';
-  } catch {
+function getSafeGameSelectionUrl(url) {
+  const safeUrl = getSafeSameOriginPath(url);
+  if (!safeUrl) {
     logger.error(`Invalid URL: ${url}`);
-    return false;
+    return null;
   }
+  return safeUrl;
 }
 
 export function initLayout() {
@@ -171,8 +170,9 @@ export function handleGameSelection(opt) {
   if (val === 'join_custom_game') {
     openModal('joinCustomGameModal');
   } else {
-    if (isSafeRelativeUrl(val)) {
-      window.location.href = val;
+    const safeUrl = getSafeGameSelectionUrl(val);
+    if (safeUrl) {
+      window.location.assign(safeUrl);
     } else {
       logger.error(`Blocked unsafe URL: ${val}`);
     }

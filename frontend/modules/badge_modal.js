@@ -1,6 +1,7 @@
 'use strict';
 import { openModal } from './modal_common.js';
 import logger from '../logger.js';
+import { getSafeMediaUrl } from '../utils.js';
 
 // Cache loaded badges within this module
 let allBadges = [];
@@ -8,23 +9,6 @@ const placeholderMeta = document.querySelector('meta[name="placeholder-image"]')
 const PLACEHOLDER_IMAGE = placeholderMeta
   ? placeholderMeta.getAttribute('content')
   : '';
-
-/**
- * Validate that a given URL is a safe image source.
- * @param {string} url - The URL to validate.
- * @returns {string} - The validated URL or the placeholder image.
-*/
-function validateImageUrl(url) {
-  try {
-    const parsedUrl = new URL(url, window.location.origin);
-    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-      return url;
-    }
-  } catch {
-    // Invalid URL
-  }
-  return PLACEHOLDER_IMAGE;
-}
 
 /**
  * Fetch badges from the server. Updates the global cache and returns it.
@@ -116,7 +100,7 @@ function populateBadgeModal(badge, requiredCount, currentUserCompletions, taskLi
   }
 
   modalTitle.textContent = badge.name;
-  modalImage.src = validateImageUrl(badge.image) || PLACEHOLDER_IMAGE;
+  modalImage.src = getSafeMediaUrl(badge.image) || PLACEHOLDER_IMAGE;
 
   modalText.textContent = '';
 
@@ -128,7 +112,9 @@ function populateBadgeModal(badge, requiredCount, currentUserCompletions, taskLi
 
   if (taskId) {
     const reqP = document.createElement('p');
-    reqP.textContent = `Completion Requirement: ${requiredCount > 1 ? requiredCount + ' times' : requiredCount + ' time'}`;
+    reqP.textContent = `Completion Requirement: ${
+      requiredCount > 1 ? requiredCount + ' times' : requiredCount + ' time'
+    }`;
     modalText.appendChild(reqP);
 
     const totalP = document.createElement('p');
@@ -234,4 +220,3 @@ document.addEventListener('click', (e) => {
     openBadgeModal(badgeEl);
   }
 });
-

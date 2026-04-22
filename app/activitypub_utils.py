@@ -10,17 +10,21 @@ This module provides:
 - Activity delivery to remote inboxes
 - Helper to construct, store, and deliver Create activities for quest submissions
 """
+import ipaddress
 import json
 import uuid
-from typing import Iterable, List, Set, Optional
-import rsa
-import requests
-from .utils import REQUEST_TIMEOUT
 from datetime import datetime, timezone
 from email.utils import formatdate
-from urllib.parse import urlparse
-from flask import Blueprint, current_app, request, abort, jsonify, url_for
+from functools import lru_cache
+from typing import Iterable, List, Optional, Set
+from urllib.parse import urlparse, urlunparse
+
+import requests
+import rsa
+from flask import Blueprint, Response, current_app, request, abort, jsonify, url_for
 from pydantic import ValidationError
+
+from .utils import REQUEST_TIMEOUT
 from app.tasks import enqueue_deliver_activity
 from app.models import db
 from app.models import ForeignActor, RemoteFollower
@@ -48,7 +52,72 @@ def _canonical_json(obj: dict) -> str:
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
 
 
-from functools import lru_cache
+def _is_private_or_local_host(hostname: str | None) -> bool:
+    """Return True when the hostname resolves to a local or private target."""
+
+    if not hostname:
+        return True
+
+    normalized = hostname.rstrip(".").lower()
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return True
+
+    local_domain = (current_app.config.get("LOCAL_DOMAIN") or "").rstrip(".").lower()
+    if local_domain and normalized == local_domain:
+        return True
+
+    try:
+        host_ip = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+
+    return any(
+        (
+            host_ip.is_private,
+            host_ip.is_loopback,
+            host_ip.is_link_local,
+            host_ip.is_multicast,
+            host_ip.is_reserved,
+            host_ip.is_unspecified,
+        )
+    )
+
+
+def _normalize_remote_http_url(url: str | None) -> str:
+    """Validate and canonicalize a remote HTTP(S) URL used for federation."""
+
+    if not isinstance(url, str):
+        raise ValueError("ActivityPub URL must be a string")
+
+    candidate = url.strip()
+    if not candidate or any(ord(ch) < 32 for ch in candidate):
+        raise ValueError("ActivityPub URL is empty or malformed")
+
+    try:
+        parsed = urlparse(candidate)
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError("ActivityPub URL contains an invalid port") from exc
+
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("ActivityPub URL must use HTTP or HTTPS")
+    if not parsed.hostname:
+        raise ValueError("ActivityPub URL is missing a hostname")
+    if parsed.username or parsed.password:
+        raise ValueError("ActivityPub URL must not contain credentials")
+    if _is_private_or_local_host(parsed.hostname):
+        raise ValueError("ActivityPub URL must not target local or private hosts")
+
+    return urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path or "/",
+            parsed.params,
+            parsed.query,
+            "",
+        )
+    )
 
 
 @lru_cache(maxsize=1024)
@@ -58,8 +127,10 @@ def discover_remote_inbox(actor_uri):
     perform WebFinger + actor fetch and return the declared inbox URL.
     Cache it on your Actor/ForeignActor model so you never repeat discovery.
     """
+    actor_uri = _normalize_remote_http_url(actor_uri)
     parsed = urlparse(actor_uri)
     webfinger_url = f"{parsed.scheme}://{parsed.netloc}/.well-known/webfinger"
+    webfinger_url = _normalize_remote_http_url(webfinger_url)
     # Per spec and widespread practice, pass the actor URI directly as resource
     params = {"resource": actor_uri}
     wf = requests.get(webfinger_url, params=params, timeout=REQUEST_TIMEOUT)
@@ -71,7 +142,7 @@ def discover_remote_inbox(actor_uri):
         if link.get('rel') == 'self'
            and link.get('type') == 'application/activity+json'
     )
-    canonical_actor = self_link['href']
+    canonical_actor = _normalize_remote_http_url(self_link["href"])
 
                            
     resp = requests.get(
@@ -83,10 +154,10 @@ def discover_remote_inbox(actor_uri):
     actor_doc = resp.json()
 
                           
-    inbox = actor_doc.get('inbox')\
-         or actor_doc.get('endpoints', {}).get('inbox')
+    inbox = actor_doc.get("inbox") or actor_doc.get("endpoints", {}).get("inbox")
     if not inbox:
         raise ValueError("Remote actor did not declare an inbox endpoint")
+    inbox = _normalize_remote_http_url(inbox)
 
     # Upsert ForeignActor cache
     fa = (
@@ -172,6 +243,7 @@ def _signed_get(url: str, as_user: "User"):
     Signs (request-target) host date accept using the user's private key.
     Returns a ``requests.Response``.
     """
+    url = _normalize_remote_http_url(url)
     parsed = urlparse(url)
     path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
     date_header = formatdate(usegmt=True)
@@ -212,6 +284,7 @@ def _fetch_actor_public_key(actor_uri: str, signed_as: Optional["User"] = None) 
 
     If the remote requires signed fetch, ``signed_as`` is used to sign the GET.
     """
+    actor_uri = _normalize_remote_http_url(actor_uri)
     # Try cache first
     fa = (
         ForeignActor.query.filter_by(actor_uri=actor_uri).first()
@@ -238,11 +311,19 @@ def _fetch_actor_public_key(actor_uri: str, signed_as: Optional["User"] = None) 
         raise ValueError("Remote actor missing publicKeyPem")
 
     fa = fa or ForeignActor(actor_uri=actor_uri)
-    fa.canonical_uri = doc.get("id") or fa.canonical_uri
+    canonical_uri = doc.get("id")
+    if canonical_uri:
+        try:
+            fa.canonical_uri = _normalize_remote_http_url(canonical_uri)
+        except ValueError:
+            current_app.logger.warning("Ignoring invalid remote actor id %s", canonical_uri)
     fa.public_key_pem = key
     inbox = doc.get("inbox") or (doc.get("endpoints", {}) or {}).get("inbox")
     if inbox:
-        fa.inbox_url = inbox
+        try:
+            fa.inbox_url = _normalize_remote_http_url(inbox)
+        except ValueError:
+            current_app.logger.warning("Ignoring invalid remote inbox %s", inbox)
     db.session.add(fa)
     try:
         db.session.commit()
@@ -667,15 +748,18 @@ def outbox_post(username):
     db.session.commit()
 
     # 201 Created + Location header pointing to the Activity id
-    headers = {
-        'Content-Type': 'application/activity+json',
-        'Location': activity.get('id', '')
-    }
+    response = Response(
+        _canonical_json({"id": activity["id"]}),
+        status=201,
+        mimetype="application/activity+json",
+    )
+    response.headers["Location"] = activity["id"]
+    response.headers["X-Content-Type-Options"] = "nosniff"
 
     # Kick off delivery
     enqueue_deliver_activity(activity, user.id)
 
-    return jsonify(activity), 201, headers
+    return response
 
 
 @ap_bp.route('/<username>/inbox', methods=['GET'])
@@ -822,21 +906,27 @@ def deliver_activity(activity, sender):
                 pass
 
     for recipient in recipients:
-        parsed = urlparse(recipient)
-        if not parsed.scheme or not parsed.netloc:
+        # Skip non-actor recipients like Public
+        if recipient.endswith('#Public'):
+            continue
+
+        try:
+            normalized_recipient = _normalize_remote_http_url(recipient)
+        except ValueError:
             current_app.logger.warning(
                 "Skipping invalid ActivityPub recipient %s", recipient
             )
             continue
 
-        if local_domain and parsed.netloc == local_domain:
+        parsed = urlparse(normalized_recipient)
+        if local_domain and parsed.hostname == local_domain:
             current_app.logger.debug(
-                "Skipping local ActivityPub delivery to %s", recipient
+                "Skipping local ActivityPub delivery to %s", normalized_recipient
             )
             continue
 
         # Handle followers collection fan-out
-        if recipient.endswith('/followers'):
+        if normalized_recipient.endswith('/followers'):
             # Fan-out to cached remote followers for the sender
             try:
                 followers_q = (
@@ -846,8 +936,11 @@ def deliver_activity(activity, sender):
                 )
                 remote_fas = followers_q.all()
                 for fa in remote_fas:
-                    inbox_url = fa.inbox_url or discover_remote_inbox(fa.actor_uri)
+                    inbox_url = fa.inbox_url or fa.actor_uri
                     try:
+                        inbox_url = _normalize_remote_http_url(
+                            fa.inbox_url or discover_remote_inbox(fa.actor_uri)
+                        )
                         body = _canonical_json(deliver_payload)
                         headers = sign_activitypub_request(sender, 'POST', inbox_url, body)
                         resp = requests.post(inbox_url, data=body, headers=headers, timeout=REQUEST_TIMEOUT)
@@ -858,12 +951,13 @@ def deliver_activity(activity, sender):
                 current_app.logger.error("Failed fan-out to remote followers: %s", e)
             continue
 
-        # Skip non-actor recipients like Public
-        if recipient.endswith('#Public'):
-            continue
-
-        inbox_url = recipient.rstrip('/') + '/inbox'
+        inbox_url = normalized_recipient
         try:
+            inbox_url = (
+                normalized_recipient
+                if normalized_recipient.endswith("/inbox")
+                else _normalize_remote_http_url(f"{normalized_recipient.rstrip('/')}/inbox")
+            )
             body = _canonical_json(deliver_payload)
             headers = sign_activitypub_request(sender, 'POST', inbox_url, body)
             resp = requests.post(inbox_url, data=body, headers=headers, timeout=REQUEST_TIMEOUT)

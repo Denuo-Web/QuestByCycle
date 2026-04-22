@@ -47,6 +47,8 @@ def test_deliver_activity_skips_invalid_and_local(app):
         "type": "Create",
         "to": [
             "https:///users/bad",
+            "http://127.0.0.1/users/private",
+            "http://192.168.1.7/users/private",
             "https://example.com/users/local",
             "https://remote.test/users/remote",
         ],

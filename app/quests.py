@@ -83,6 +83,25 @@ from .models import (
 
 quests_bp = Blueprint("quests", __name__, template_folder="templates")
 
+SAFE_MEDIA_UPLOAD_MESSAGES = {
+    "File extension not allowed.",
+    "Invalid or corrupted video file",
+    "MIME type not allowed.",
+    "Video dimensions exceed 1920x1080 limit",
+    "Video duration exceeds 10 seconds limit",
+    "Video exceeds 25 MB limit",
+    "Video exceeds 25 MB limit after compression",
+}
+
+
+def _safe_media_upload_message(error: Exception) -> str:
+    """Return an approved client-facing media upload error message."""
+
+    message = str(error)
+    if message in SAFE_MEDIA_UPLOAD_MESSAGES:
+        return message
+    return "Unable to process the uploaded file. Please verify it and try again."
+
 
 @quests_bp.route("/<int:game_id>/manage_quests", methods=["GET"])
 @login_required
@@ -305,9 +324,14 @@ def submit_quest(quest_id):
             try:
                 video_url = save_submission_video(video_file)
                 current_app.logger.debug("Video saved to %s", video_url)
-            except ValueError as ve:
-                current_app.logger.error("Error processing video file: %s", str(ve))
-                return jsonify({"success": False, "message": str(ve)}), 400
+            except ValueError as exc:
+                current_app.logger.error("Error processing video file: %s", exc)
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": _safe_media_upload_message(exc),
+                    }
+                ), 400
             image_path = os.path.join(current_app.static_folder, video_url)
         else:
             image_path = None
@@ -1570,9 +1594,12 @@ def update_submission_photo(submission_id):
             old_video = sub.video_url
             old_image = sub.image_url
             new_path = save_submission_video(video)
-        except ValueError as ve:
-            current_app.logger.error("Error saving submission video: %s", str(ve))
-            return jsonify(success=False, message=str(ve)), 400
+        except ValueError as exc:
+            current_app.logger.error("Error saving submission video: %s", exc)
+            return jsonify(
+                success=False,
+                message=_safe_media_upload_message(exc),
+            ), 400
         # Remove previous media files if present
         if old_video and old_video != new_path:
             delete_media_file(old_video)
