@@ -103,7 +103,7 @@ function getBadgeFromElement(element) {
     id: element.getAttribute('data-badge-id'),
     name: element.getAttribute('data-badge-name') || 'Badge',
     description: element.getAttribute('data-badge-description') || '',
-    image: element.getAttribute('data-badge-image') || PLACEHOLDER_IMAGE
+    image: PLACEHOLDER_IMAGE
   };
 }
 

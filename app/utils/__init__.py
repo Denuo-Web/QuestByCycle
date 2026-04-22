@@ -149,7 +149,7 @@ def generate_demo_game() -> Game | None:
 
     existing_game = Game.query.filter_by(is_demo=True, title=title).first()
     if existing_game:
-        return
+        return existing_game
 
     # Archive previous demo games so users can view past statistics
     old_demos = Game.query.filter_by(is_demo=True, archived=False).all()

@@ -1017,20 +1017,17 @@ def contact():
         message = sanitize_html(form.message.data)
         subject = "New Contact Form Submission"
         recipient = "jaron.rosenau+QbCFeedback@gmail.com"
-
-        user_info = None
-        if current_user.is_authenticated:
-            user_info = {
-                "username": current_user.username,
-                "email": current_user.email,
-                "is_admin": current_user.is_admin,
-                "created_at": current_user.created_at,
-                "license_agreed": current_user.license_agreed,
-                "display_name": current_user.display_name,
-                "age_group": current_user.age_group,
-                "interests": current_user.interests,
-                "email_verified": current_user.email_verified,
-            }
+        user_info = {
+            "username": current_user.username,
+            "email": current_user.email,
+            "is_admin": current_user.is_admin,
+            "created_at": current_user.created_at,
+            "license_agreed": current_user.license_agreed,
+            "display_name": current_user.display_name,
+            "age_group": current_user.age_group,
+            "interests": current_user.interests,
+            "email_verified": current_user.email_verified,
+        }
 
         html = render_template('contact_email.html', message=message, user_info=user_info)
         try:
@@ -1039,10 +1036,10 @@ def contact():
                 return jsonify(success=True)
             flash('Your message has been sent successfully.', 'success')
         except Exception as exc:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return
-            flash('Failed to send your message. Please try again later.', 'error')
             current_app.logger.error('Failed to send contact form message: %s', exc)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify(success=False, message="Failed to send message"), 500
+            flash('Failed to send your message. Please try again later.', 'error')
     else:
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify(success=False, message="Validation failed"), 400

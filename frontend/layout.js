@@ -3,45 +3,9 @@ import logger from './logger.js';
 import { openModal } from './modules/modal_common.js';
 import { csrfFetchJson } from './utils.js';
 
-const CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
-
 function sendSkipWaiting(reg) {
   if (reg.waiting) {
     reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-  }
-}
-
-function getSafeGameSelectionUrl(url) {
-  if (typeof url !== 'string') {
-    return null;
-  }
-
-  const value = url.trim();
-  if (!value || CONTROL_CHARS.test(value)) {
-    logger.error(`Invalid URL: ${url}`);
-    return null;
-  }
-
-  try {
-    const parsed = new URL(value, window.location.origin);
-    const refUrl = new URL(window.location.origin);
-    const refPort = refUrl.port || (refUrl.protocol === 'https:' ? '443' : '80');
-    const parsedPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
-
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return null;
-    }
-    if (parsed.username || parsed.password) {
-      return null;
-    }
-    if (parsed.hostname !== refUrl.hostname || parsedPort !== refPort) {
-      return null;
-    }
-
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    logger.error(`Invalid URL: ${url}`);
-    return null;
   }
 }
 
@@ -192,18 +156,13 @@ export function initLayout() {
   });
 }
 
-export function handleGameSelection(opt) {
-  const val = opt.value;
-  if (val === 'join_custom_game') {
+export function handleGameSelection(selection) {
+  const value = typeof selection === 'string' ? selection.trim() : '';
+  if (value === 'join_custom_game') {
     openModal('joinCustomGameModal');
-  } else {
-    const safeUrl = getSafeGameSelectionUrl(val);
-    if (safeUrl) {
-      window.location.assign(safeUrl);
-    } else {
-      logger.error(`Blocked unsafe URL: ${val}`);
-    }
+    return;
   }
+  logger.error(`Blocked unknown game selection: ${String(selection)}`);
 }
 
 // Delegate clicks for game selection
@@ -211,5 +170,5 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-game-selection]');
   if (!el) return;
   e.preventDefault();
-  handleGameSelection({ value: el.getAttribute('data-game-selection') });
+  handleGameSelection(el.getAttribute('data-game-selection'));
 });

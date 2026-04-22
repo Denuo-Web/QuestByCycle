@@ -1246,9 +1246,6 @@ def quest_details(quest_id):
     Args:
         quest_id (int): The ID of the quest.
     """
-    if not current_user.is_authenticated:
-        return
-
     quest = Quest.query.get_or_404(quest_id)
     quest_data = {
         "id": quest.id,

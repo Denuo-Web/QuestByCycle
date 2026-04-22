@@ -16,6 +16,8 @@ from PIL import Image
 from app.schemas import GenerateQuestSchema, GenerateBadgeImageSchema
 
 ai_bp = Blueprint('ai', __name__, template_folder='templates')
+AI_QUEST_ERROR_MESSAGE = "Unable to generate quest."
+NON_BICYCLE_QUEST_MESSAGE = "Generated quest is not bicycle-related."
 
 @ai_bp.route('/generate_quest', methods=['POST'])
 @login_required
@@ -121,7 +123,7 @@ def generate_badge_image():
         return jsonify({"error": "Invalid input", "details": exc.errors()}), 400
     badge_description = payload.badge_description
     if not badge_description:
-        return
+        return jsonify({"error": "Badge description is required."}), 400
 
     sanitized_badge_description = sanitize_html(badge_description)
     badge_prompt = (
@@ -193,11 +195,12 @@ def generate_quest_details(description):
                 quest_details['Completion Limit'] = 1
 
             return quest_details, None
-        
-        return None, "Generated quest is not bicycle-related."
 
-    except Exception as e:
-        return None, f"Failed to generate quest due to an error: {str(e)}"
+        return None, NON_BICYCLE_QUEST_MESSAGE
+
+    except Exception:
+        current_app.logger.exception("Failed to generate quest details")
+        return None, AI_QUEST_ERROR_MESSAGE
 
 def generate_quest_prompt(description):
     return f"""

@@ -57,7 +57,7 @@ def create_game_with_quests():
 
 
 def test_game_quests_endpoint(client):
-    game, q1, q2 = create_game_with_quests()
+    game, q1, _ = create_game_with_quests()
     resp = client.get(f"/games/{game.id}/quests")
     assert resp.status_code == 200
     data = resp.get_json()

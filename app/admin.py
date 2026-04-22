@@ -151,7 +151,8 @@ def user_management(game_id=None):
 def user_details(user_id):
     user = db.session.get(User, user_id)
     if not user:
-        return
+        flash('User not found.', 'error')
+        return redirect(url_for('admin.user_management'))
 
     return render_template('user_details.html', user=user, in_admin_dashboard=True)
 

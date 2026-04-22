@@ -112,7 +112,7 @@ function displayAllSubmissions(submissions, isAdmin, append = false) {
             deleteButton.className = 'button delete-button';
             deleteButton.addEventListener('click', function(event) {
                 event.stopPropagation();  // Prevent triggering card click event
-                deleteSubmission(submission.id, 'allSubmissions');
+                deleteSubmission(submission.id);
             });
             card.appendChild(deleteButton);
         }
