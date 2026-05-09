@@ -20,7 +20,7 @@ wtforms               = "^3.2.1"
 email-validator       = "^2.3.0"
 cryptography          = "^46.0.7"
 pyjwt                 = "^2.12.1"
-gunicorn              = "^25.3.0"
+gunicorn              = ">=25.3,<27.0"
 apscheduler           = "^3.11.2"
 qrcode                = {extras = ["pil"], version = "^8.2"}
 openai                = "^2.32.0"
