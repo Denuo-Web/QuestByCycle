@@ -271,3 +271,11 @@ We welcome contributions from the community! Whether you're interested in adding
 
 - The bicycling community for their endless passion and dedication to making the world a greener place.
 - All contributors who spend their time and effort to improve QuestByCycle.
+
+## Portfolio Case Study
+
+This repository is part of Jaron Rosenau's implementation, developer-support, and integration engineering portfolio. The public case study summarizes the problem, delivery scope, architecture, and operational result.
+
+- Case study: [QuestByCycle implementation case study](https://rosenau.info/projects/1JvAHKcCLWxQlVstunw4)
+- Full portfolio: [Jaron Rosenau](https://rosenau.info)
+- Summary: Authenticated community climate game platform with quests, leaderboards, PWA workflows, deployment, and production support.
