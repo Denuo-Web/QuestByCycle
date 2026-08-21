@@ -7,9 +7,6 @@ updates:
     labels:
       - dependencies
     open-pull-requests-limit: 10
-    ignore:
-      - dependency-name: "flask-humanify"
-
   - package-ecosystem: npm
     directory: "/"
     schedule:
