@@ -109,7 +109,7 @@ Ensure you have the following installed:
 - Python 3.11
 - PostgreSQL
 - Redis
-- Node.js 22 and npm
+- Node.js 24 and npm
 - ffmpeg (optional for video compression)
 - Poetry (with a Python 3.11 virtualenv)
 

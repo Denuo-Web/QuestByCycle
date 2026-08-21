@@ -66,8 +66,8 @@ sudo ufw enable
 sudo -u USER bash -c '
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-nvm install 22
-nvm use 22
+nvm install 24
+nvm use 24
 npm install
 npm run build
 '
