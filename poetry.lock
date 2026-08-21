@@ -857,18 +857,17 @@ dotenv = ["python-dotenv"]
 
 [[package]]
 name = "flask-humanify"
-version = "0.2.9"
+version = "0.2.8"
 description = "Protect against bots and DDoS attacks"
 optional = false
 python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "flask_humanify-0.2.9-py3-none-any.whl", hash = "sha256:68a61f23c1624cd98868334e2b699f1787f13c55599a02fe144b68277f861a21"},
-    {file = "flask_humanify-0.2.9.tar.gz", hash = "sha256:1781c42f94e9b6b7a31072199f29631248931a7d12ba08cb58e7611f453df389"},
+    {file = "flask_humanify-0.2.8-py3-none-any.whl", hash = "sha256:b68841fa696b994d823244e04f8291f52b99672b14620eb4f144e7a0dc46b45b"},
+    {file = "flask_humanify-0.2.8.tar.gz", hash = "sha256:0155ef5470ba6f2197ebb33b24aa1def7f03ec30584e1f3c073039670fcfe702"},
 ]
 
 [package.dependencies]
-audioop-lts = {version = ">=0.2.1", markers = "python_version >= \"3.13\""}
 crawler-user-agents = "*"
 cryptography = "*"
 Flask = "*"
@@ -4024,4 +4023,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "3af24a90729debb37ba84432143cdf4461a7942cb6788f98ba3c8ef34ea1a0af"
+content-hash = "3f8262fc094c6d04c6a4cbe3d2f5dc6af3e08ba7069f0ebf2bcbd73098b5006c"
