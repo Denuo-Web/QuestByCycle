@@ -11,7 +11,7 @@
     "build": "node scripts/inject_sw_version.cjs && vite build"
   },
   "devDependencies": {
-    "eslint": "^10.9.0",
+    "eslint": "^10.10.0",
     "sass": "^1.103.1",
     "vite": "^8.2.2"
   }
