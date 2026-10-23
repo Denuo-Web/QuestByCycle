@@ -35,3 +35,32 @@ gcloud auth application-default login
    ansible-playbook -i inventory.yml site.yml
    ```
    This installs dependencies, sets up PostgreSQL, and configures Gunicorn and Nginx.
+
+## Updating denuoweb-vm
+
+The current VM runs the application from `/opt/QuestByCycle` as `questadmin`. Its
+systemd units are `questbycycle.service` and `questbycycle-rqworker.service`.
+They use the Poetry Python 3.11 environment for that directory. The VM has
+Node 18, while the frontend requires Node 20.19 or newer, so build the
+frontend on a compatible machine and deploy `app/static/dist/` with the source
+and lockfiles.
+
+Connect through Identity-Aware Proxy:
+
+```bash
+gcloud compute ssh denuoweb-vm --zone=us-west1-b --tunnel-through-iap
+```
+
+After copying a tested release to `/opt/QuestByCycle`, install its locked
+Python dependencies as `questadmin`, then restart both services:
+
+```bash
+cd /opt/QuestByCycle
+sudo -u questadmin /home/questadmin/.local/bin/poetry install --no-interaction
+sudo systemctl restart questbycycle.service questbycycle-rqworker.service
+sudo systemctl status questbycycle.service questbycycle-rqworker.service --no-pager
+```
+
+Check the application through Nginx after the restart. The Ansible playbook
+above describes a separate prod/dev layout and does not match these live
+systemd units.
