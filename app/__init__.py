@@ -230,8 +230,8 @@ def create_app(config_overrides: Mapping[str, Any] | None = None) -> Flask:
     )
     limiter.init_app(app)
 
-    if not app.config.get("TESTING"):
-        # Import and initialize Humanify only outside tests to avoid heavy deps (SciPy)
+    if not app.config.get("TESTING") and app.config.get("HUMANIFY_ENABLED", True):
+        # Initialize the HTTP challenge only for request-serving applications.
         try:  # pragma: no cover - exercised in production
             from flask_humanify import Humanify  # type: ignore
             # Replace the stub with a real instance

@@ -5,7 +5,7 @@ from app.tasks import init_queue
 
 
 def main() -> None:
-    app = create_app()
+    app = create_app({"HUMANIFY_ENABLED": False})
     queue = init_queue(app)
     # push the Flask context so tasks can use current_app, etc.
     app.app_context().push()

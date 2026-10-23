@@ -44,6 +44,7 @@ They use the Poetry Python 3.11 environment for that directory. The VM has
 Node 18, while the frontend requires Node 20.19 or newer, so build the
 frontend on a compatible machine and deploy `app/static/dist/` with the source
 and lockfiles.
+The queue worker does not initialize the HTTP-only Humanify challenge server.
 
 Connect through Identity-Aware Proxy:
 
