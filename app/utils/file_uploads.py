@@ -1,8 +1,11 @@
 # File upload related helpers
 from __future__ import annotations
+import math
 import os
 import shutil
+import stat
 import subprocess
+import tempfile
 import uuid
 from urllib.parse import urlparse
 
@@ -130,6 +133,72 @@ def _get_ffmpeg_bin() -> str | None:
             return resolved
 
     return shutil.which("ffmpeg")
+
+
+def _run_video_tool(tool: str, args: list[str], workdir: str, *, timeout: int) -> bytes:
+    """Run a media parser with only its temporary files visible and bounded resources."""
+    bwrap = shutil.which("bwrap")
+    prlimit = shutil.which("prlimit")
+    if not bwrap or not prlimit:
+        raise ValueError("Video processing is unavailable")
+
+    command = [
+        prlimit, "--as=805306368", "--cpu=90", "--fsize=33554432", "--nofile=128", "--",
+        bwrap, "--unshare-user", "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts",
+        "--uid", "65534", "--gid", "65534", "--die-with-parent", "--new-session",
+        "--ro-bind", "/usr", "/usr", "--tmpfs", "/usr/local", "--symlink", "usr/lib", "/lib",
+        "--symlink", "usr/lib64", "/lib64",
+        "--ro-bind", "/etc/alternatives", "/etc/alternatives",
+        "--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache",
+        "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
+        "--bind", workdir, "/work", "--chdir", "/work",
+        "--clearenv", "--setenv", "PATH", "/usr/bin:/bin", "--setenv", "HOME", "/tmp",
+        tool, *args,
+    ]
+    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        try:
+            result = subprocess.run(command, stdout=stdout, stderr=stderr, timeout=timeout, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("Video processing timed out") from exc
+        except OSError as exc:
+            raise ValueError("Video processing is unavailable") from exc
+        if result.returncode:
+            stderr.seek(0)
+            current_app.logger.warning("Media parser failed: %r", stderr.read(4096).decode(errors="replace"))
+            raise ValueError("Invalid or corrupted video file")
+        stdout.seek(0)
+        output = stdout.read(4097)
+        if len(output) > 4096:
+            raise ValueError("Invalid or corrupted video file")
+        return output
+
+
+def _save_sandbox_output(output_path: str, final_path: str) -> None:
+    """Copy only a bounded regular video file out of the untrusted work directory."""
+    try:
+        descriptor = os.open(output_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as exc:
+        raise ValueError("Invalid or corrupted video file") from exc
+    with os.fdopen(descriptor, "rb") as source:
+        file_stat = os.fstat(source.fileno())
+        if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1 or file_stat.st_size == 0:
+            raise ValueError("Invalid or corrupted video file")
+        if file_stat.st_size > MAX_VIDEO_BYTES:
+            raise ValueError("Video exceeds 25 MB limit after compression")
+        created = False
+        try:
+            with open(final_path, "xb") as target:
+                created = True
+                copied = 0
+                while chunk := source.read(1024 * 1024):
+                    copied += len(chunk)
+                    if copied > MAX_VIDEO_BYTES:
+                        raise ValueError("Video exceeds 25 MB limit after compression")
+                    target.write(chunk)
+        except Exception:
+            if created:
+                os.unlink(final_path)
+            raise
 
 
 def allowed_file(filename: str, allowed_extensions: set[str]) -> bool:
@@ -317,131 +386,74 @@ def save_submission_video(submission_video_file):
             "Video exceeds 25 MB limit",
             allowed_mimetypes=ALLOWED_VIDEO_MIMETYPES,
         )
-
-        header = submission_video_file.read(512)
-        submission_video_file.seek(0)
         ffmpeg_bin = _get_ffmpeg_bin()
-        if not ffmpeg_bin and current_app.config.get("FFMPEG_PATH") in (None, "ffmpeg"):
-            if header.isascii() and b"\x00" not in header:
-                raise ValueError("Invalid or corrupted video file")
+        ffprobe_bin = shutil.which("ffprobe")
+        if not ffmpeg_bin or not ffprobe_bin:
+            raise ValueError("Video processing is unavailable")
+        if not all(os.path.realpath(tool).startswith("/usr/bin/") for tool in (ffmpeg_bin, ffprobe_bin)):
+            raise ValueError("Video processing requires FFmpeg and FFprobe under /usr/bin")
+
         tmp_dir = os.path.join(current_app.static_folder, "videos", "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
-        orig_name = secure_filename(f"{uuid.uuid4()}_orig.{ext}")
-        orig_path = os.path.join(tmp_dir, orig_name)
-        current_app.logger.debug("Saving original upload to %s", orig_path)
-        submission_video_file.save(orig_path)
-
-        ffprobe_bin = shutil.which("ffprobe")
-        if ffprobe_bin:
-            # Check dimensions
-            probe_cmd_dims = [
-                ffprobe_bin,
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=width,height",
-                "-of",
-                "csv=p=0",
-                orig_path,
-            ]
-            try:
-                probe = subprocess.run(
-                    probe_cmd_dims, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
-                dims = probe.stdout.decode().strip().split(",")
-                if len(dims) == 2:
-                    width, height = map(int, dims)
-                    if width > MAX_VIDEO_WIDTH or height > MAX_VIDEO_HEIGHT:
-                        os.remove(orig_path)
-                        raise ValueError("Video dimensions exceed 1920x1080 limit")
-            except subprocess.CalledProcessError as e:
-                stderr_output = e.stderr.decode(errors="ignore") if e.stderr else ""
-                current_app.logger.error("ffprobe (dims) failed: %s", stderr_output)
-                os.remove(orig_path)
-                raise ValueError("Invalid or corrupted video file") from e
-
-            # Check duration (in seconds)
-            probe_cmd_dur = [
-                ffprobe_bin,
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                orig_path,
-            ]
-            try:
-                probe = subprocess.run(
-                    probe_cmd_dur, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-                )
-                out = probe.stdout.decode().strip()
-                try:
-                    duration = float(out)
-                except (TypeError, ValueError):
-                    duration = None
-                if duration is not None and duration > MAX_VIDEO_DURATION_SECONDS:
-                    os.remove(orig_path)
-                    raise ValueError("Video duration exceeds 10 seconds limit")
-            except subprocess.CalledProcessError as e:
-                stderr_output = e.stderr.decode(errors="ignore") if e.stderr else ""
-                current_app.logger.error("ffprobe (duration) failed: %s", stderr_output)
-                os.remove(orig_path)
-                raise ValueError("Invalid or corrupted video file") from e
-
         uploads_dir = os.path.join(current_app.static_folder, "videos", "verifications")
         os.makedirs(uploads_dir, exist_ok=True)
 
-        if not ffmpeg_bin:
-            current_app.logger.warning("ffmpeg not found, saving video without conversion")
-            final_name = secure_filename(f"{uuid.uuid4()}.{ext}")
-            final_path = os.path.join(uploads_dir, final_name)
-            shutil.move(orig_path, final_path)
-        else:
+        with tempfile.TemporaryDirectory(prefix="video-", dir=tmp_dir) as workdir:
+            input_name = f"input.{ext}"
+            input_path = os.path.join(workdir, input_name)
+            submission_video_file.save(input_path)
+            sandbox_input = f"/work/{input_name}"
+
+            dimensions = _run_video_tool(
+                ffprobe_bin,
+                ["-v", "error", "-protocol_whitelist", "file,pipe", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height", "-of", "csv=p=0", sandbox_input],
+                workdir,
+                timeout=30,
+            ).decode(errors="replace").strip().split(",")
+            try:
+                width, height = (int(value) for value in dimensions)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Invalid or corrupted video file") from exc
+            if width <= 0 or height <= 0 or width > MAX_VIDEO_WIDTH or height > MAX_VIDEO_HEIGHT:
+                raise ValueError("Video dimensions exceed 1920x1080 limit")
+
+            duration_output = _run_video_tool(
+                ffprobe_bin,
+                ["-v", "error", "-protocol_whitelist", "file,pipe", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", sandbox_input],
+                workdir,
+                timeout=30,
+            ).decode(errors="replace").strip()
+            try:
+                duration = None if duration_output == "N/A" else float(duration_output)
+            except ValueError as exc:
+                raise ValueError("Invalid or corrupted video file") from exc
+            if duration is not None and (not math.isfinite(duration) or duration <= 0):
+                raise ValueError("Invalid or corrupted video file")
+            if duration is not None and duration > MAX_VIDEO_DURATION_SECONDS:
+                raise ValueError("Video duration exceeds 10 seconds limit")
+
+            output_path = os.path.join(workdir, "output.mp4")
+            _run_video_tool(
+                ffmpeg_bin,
+                ["-nostdin", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-threads", "1",
+                 "-i", sandbox_input, "-map", "0:v:0", "-map", "0:a:0?",
+                 "-vf", "scale='min(1280,iw)':-2", "-threads", "1",
+                 "-c:v", "libx264", "-preset", "fast", "-crf", "28", "-c:a", "aac",
+                 "-t", "10", "-movflags", "faststart", "-y", "/work/output.mp4"],
+                workdir,
+                timeout=120,
+            )
             final_name = secure_filename(f"{uuid.uuid4()}.mp4")
             final_path = os.path.join(uploads_dir, final_name)
-            ffmpeg_cmd = [
-                ffmpeg_bin,
-                "-i",
-                orig_path,
-                "-vf",
-                "scale='min(1280,iw)':-2",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "fast",
-                "-crf",
-                "28",
-                "-c:a",
-                "aac",
-                "-movflags",
-                "faststart",
-                "-y",
-                final_path,
-            ]
-            current_app.logger.debug("Running ffmpeg command: %s", " ".join(ffmpeg_cmd))
-            try:
-                subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            except subprocess.CalledProcessError as e:
-                stderr_output = e.stderr.decode(errors="ignore") if e.stderr else ""
-                current_app.logger.error("ffmpeg failed: %s", stderr_output)
-                os.remove(orig_path)
-                current_app.logger.debug("Removed temporary upload %s", orig_path)
-                raise ValueError("Invalid or corrupted video file") from e
+            _save_sandbox_output(output_path, final_path)
 
-            os.remove(orig_path)
-            current_app.logger.debug("Removed temporary upload %s", orig_path)
-
-            final_size = os.path.getsize(final_path)
-            current_app.logger.debug("Compressed video size: %s bytes", final_size)
-            if final_size > MAX_VIDEO_BYTES:
-                os.remove(final_path)
-                current_app.logger.debug("Compressed video exceeded max size and was deleted")
-                raise ValueError("Video exceeds 25 MB limit after compression")
-
-        gcs_url = _upload_to_gcs(final_path, os.path.join("videos", "verifications", final_name), content_type="video/mp4")
+        gcs_url = _upload_to_gcs(
+            final_path,
+            os.path.join("videos", "verifications", final_name),
+            content_type="video/mp4",
+        )
         if gcs_url:
             os.remove(final_path)
             return gcs_url

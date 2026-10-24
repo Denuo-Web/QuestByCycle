@@ -110,7 +110,7 @@ Ensure you have the following installed:
 - PostgreSQL
 - Redis
 - Node.js 24 and npm
-- ffmpeg (optional for video compression)
+- ffmpeg, ffprobe, bubblewrap, and prlimit (required for video uploads)
 - Poetry (with a Python 3.11 virtualenv)
 
 ### Installation
@@ -151,7 +151,9 @@ Update the `.env` file with settings appropriate for your environment. The appli
 - `BADGE_IMAGE_DIR`: Directory for badge graphics.
 - `TASKCSV`: Directory containing bulk quest CSV files.
 - `LOCAL_DOMAIN`: Base domain for generating absolute URLs.
-- `FFMPEG_PATH`: Path to the `ffmpeg` executable for video processing.
+- `FFMPEG_PATH`: Path to the `ffmpeg` executable for video processing. It must be under `/usr/bin` so the media sandbox
+  can access it. Video uploads fail if FFmpeg, FFprobe, bubblewrap, or prlimit is unavailable. The parser sees only its
+  private work directory and read-only system libraries, and has no network access.
 - `PLACEHOLDER_IMAGE`: Default image path used when no image is provided.
 - `SQLALCHEMY_ECHO`: Set to `true` to log SQL statements.
 - `ASSET_VERSION`: Cache-busting string appended to static asset URLs.

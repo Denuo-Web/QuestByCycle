@@ -95,7 +95,7 @@ For automated provisioning details see [docs/INFRASTRUCTURE.md](docs/INFRASTRUCT
 - Python 3.11+
 - PostgreSQL
 - git
-- ffmpeg (optional, for video compression)
+- ffmpeg, ffprobe, bubblewrap, and prlimit (required for video uploads)
 - Poetry (for dependency management)
 - redis-server
 - NGINX with Certbot
@@ -226,8 +226,10 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 poetry run pytest -q
 Vite outputs two entry points: `main.js` for the majority of pages and
 `submitPhoto.js` which is loaded only on `submit_photo.html`.
 
-   If you have `ffmpeg` installed, ensure it is accessible or set
-    `FFMPEG_PATH` in `.env`. Without `ffmpeg` videos are stored unmodified.
+   Video uploads require `ffmpeg`, `ffprobe`, `bwrap`, and `prlimit` on the server.
+   Set `FFMPEG_PATH` in `.env` only if FFmpeg is not at `/usr/bin/ffmpeg`; the
+   executable must be under `/usr/bin` to run in the media sandbox. If any required
+   tool is missing, video uploads fail rather than storing unprocessed input.
    Run the server in debug
 ```sudo -u APPUSER /home/APPUSER/.local/bin/poetry run flask --app wsgi:app run --host=127.0.0.1 --port=5000```
 

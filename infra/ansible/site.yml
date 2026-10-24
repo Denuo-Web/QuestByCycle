@@ -57,6 +57,7 @@
           - ufw
           - redis-server
           - ffmpeg
+          - bubblewrap
           - curl
           - nodejs
           - npm
